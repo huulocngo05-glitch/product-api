@@ -1,0 +1,77 @@
+name: Product API Production CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PORT: 3000
+      MONGO_URI: mongodb://localhost:27017/productdb
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check src/server.js
+          node --check src/models/Product.js
+          node --check src/routes/productRoutes.js
+
+      - name: Start Product API
+        run: |
+          npm start > api.log 2>&1 &
+
+      - name: Wait for Product API
+        run: |
+          curl --retry 10 \
+               --retry-delay 2 \
+               --retry-connrefused \
+               http://localhost:3000/health
+
+      - name: Test Product CRUD API
+        run: |
+          curl -f -X POST http://localhost:3000/api/products \
+            -H "Content-Type: application/json" \
+            -d '{"pid":"CI001","pname":"CI Test Product","price":100,"quantity":10}'
+
+          curl -f http://localhost:3000/api/products/CI001
+
+          curl -f -X PUT http://localhost:3000/api/products/CI001 \
+            -H "Content-Type: application/json" \
+            -d '{"pname":"CI Updated Product","price":150,"quantity":20}'
+
+          curl -f -X DELETE http://localhost:3000/api/products/CI001
+
+      - name: Show API log if test fails
+        if: failure()
+        run: cat api.log
