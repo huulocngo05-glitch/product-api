@@ -1,10 +1,10 @@
-```yaml
 name: Deploy to Local Docker
 
 on:
   workflow_run:
     workflows: ["CD - Docker Hub"]
-    types: [completed]
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -25,7 +25,6 @@ jobs:
         run: |
           docker compose -f docker-compose-prod.yaml pull
           if errorlevel 1 exit /b 1
-
           docker compose -f docker-compose-prod.yaml up -d --force-recreate
           if errorlevel 1 exit /b 1
 
@@ -38,4 +37,3 @@ jobs:
             docker compose -f docker-compose-prod.yaml logs --tail 100 product-api
             exit /b 1
           )
-```
