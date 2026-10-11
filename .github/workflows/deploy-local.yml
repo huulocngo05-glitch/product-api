@@ -20,34 +20,19 @@ jobs:
           ref: main
 
       - name: Pull and restart containers
-        shell: powershell
+        shell: cmd
         run: |
           docker compose -f docker-compose-prod.yaml pull
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if errorlevel 1 exit /b 1
 
           docker compose -f docker-compose-prod.yaml up -d --force-recreate
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if errorlevel 1 exit /b 1
 
       - name: Check API health
-        shell: powershell
+        shell: cmd
         run: |
-          $ok = $false
-
-          for ($i = 0; $i -lt 15; $i++) {
-            try {
-              $response = Invoke-WebRequest -Uri "http://localhost:3002/health" -UseBasicParsing -TimeoutSec 5
-
-              if ($response.StatusCode -eq 200) {
-                Write-Output $response.Content
-                $ok = $true
-                break
-              }
-            } catch {}
-
-            Start-Sleep -Seconds 2
-          }
-
-          if (-not $ok) {
+          curl.exe --fail --silent --show-error --retry 15 --retry-delay 2 --retry-connrefused http://localhost:3002/health
+          if errorlevel 1 (
             docker compose -f docker-compose-prod.yaml logs product-api
-            exit 1
-          }
+            exit /b 1
+          )
